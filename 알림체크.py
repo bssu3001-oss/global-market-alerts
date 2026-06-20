@@ -218,8 +218,12 @@ def kakao_get_access_token(rest_api_key, refresh_token, client_secret=None):
         data=data,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    with urllib.request.urlopen(req, timeout=10) as r:
-        result = json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            result = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"토큰 갱신 HTTP {e.code}: {body}")
     if "access_token" not in result:
         raise RuntimeError(f"토큰 갱신 실패: {result}")
     return result["access_token"]
