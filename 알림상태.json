@@ -4,5 +4,28 @@
     "indonesia_매수_저점",
     "brazil_매수_rsi",
     "brazil_매수_저점"
-  ]
+  ],
+  "^NSEI": {
+    "trend_break": {
+      "active": true,
+      "last_fired": "2026-06-20"
+    }
+  },
+  "^JKSE": {
+    "drawdown15": {
+      "active": true,
+      "last_fired": "2026-06-20"
+    }
+  },
+  "^GSPC": {},
+  "^BVSP": {
+    "drawdown15": {
+      "active": true,
+      "last_fired": "2026-06-20"
+    },
+    "rsi_oversold": {
+      "active": true,
+      "last_fired": "2026-06-20"
+    }
+  }
 }
