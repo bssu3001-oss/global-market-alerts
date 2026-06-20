@@ -1,37 +1,43 @@
-name: 글로벌 증시 조건부 카톡 알림
+name: 글로벌 증시 알림
 
 on:
   schedule:
-    - cron: '*/10 0-9 * * 1-5'   # 평일 KST 09:00~18:59 (UTC 00:00~09:59)
-  workflow_dispatch:
+    # 평일 08:30 KST = UTC 일~목 23:30  (KST = UTC+9)
+    - cron: "30 23 * * 0-4"
+  workflow_dispatch: {}        # 수동 테스트용
 
 permissions:
-  contents: write
+  contents: write              # 알림상태.json 커밋용
+
+concurrency:                   # 실행 겹침 방지
+  group: market-alert
+  cancel-in-progress: false
 
 jobs:
-  notify:
+  alert:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.12"
+          cache: pip
 
-      - name: 패키지 설치
-        run: pip install yfinance
+      - run: pip install -r requirements.txt
 
-      - name: 글로벌 증시 조건 체크 & 카톡 발송
+      - name: 알림 체크
         env:
           KAKAO_REST_API_KEY:  ${{ secrets.KAKAO_REST_API_KEY }}
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          GH_PAT:              ${{ secrets.GH_PAT }}   # 선택: refresh token 자동 갱신용
         run: python 알림체크.py
 
-      - name: 알림 상태 저장
+      - name: 상태 저장
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add 알림상태.json || true
-          git diff --cached --quiet || git commit -m "알림상태 업데이트"
-          git push || true
+          git add 알림상태.json
+          git diff --staged --quiet || git commit -m "상태 업데이트 $(date +%F)"
+          git push

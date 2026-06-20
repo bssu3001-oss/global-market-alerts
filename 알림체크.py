@@ -1,314 +1,294 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-글로벌 증시 조건부 카톡 알림 — GitHub Actions 10분마다 실행
-조건 충족 시에만 카톡 발송, 같은 조건 하루 1번만 발송
+글로벌 증시 조건부 카톡 알림 — 펀드 holder 버전
+
+설계 원칙
+  1) 평일 1회(한국시간 아침) 실행 — 10분 폴링 아님
+  2) 각 시장의 '확정된 일봉 종가'로만 신호 계산
+  3) edge 트리거 + 쿨다운 → 같은 신호가 매일 반복 발송되지 않음
+  4) 티커별 조회 실패는 스킵(전체 run 을 죽이지 않음)
+  5) 펀드 주문 컷오프(기본 17:00 KST) 전에 검토할 수 있게 안내
 """
 
-import json
 import os
-import urllib.request
-import urllib.parse
-from datetime import datetime, timezone, timedelta
+import json
+import datetime as dt
+from zoneinfo import ZoneInfo
 
+import requests
+import pandas as pd
 import yfinance as yf
 
-KST = timezone(timedelta(hours=9))
-STATE_FILE = os.path.join(os.path.dirname(__file__), "알림상태.json")
-DASHBOARD_BASE = "https://bssu3001-oss.github.io"
+# ----------------------------------------------------------------------
+# 설정 — 본인 펀드에 맞게 이 블록만 손보면 됩니다
+# ----------------------------------------------------------------------
+STATE_FILE = "알림상태.json"
+COOLDOWN_DAYS = 5            # 같은 신호 재발송 최소 간격(일)
+FUND_CUTOFF = "17:00"       # 펀드 주문 컷오프(한국시간). 투자설명서에서 확인 후 수정
+DASHBOARD_URL = "https://bssu3001-oss.github.io"
+KST = ZoneInfo("Asia/Seoul")
 
-COUNTRIES = {
-    "india":     {"name": "인도",      "flag": "🇮🇳", "ticker": "^NSEI",  "label": "NIFTY 50",  "dashboard": f"{DASHBOARD_BASE}/india-market-dashboard/"},
-    "vietnam":   {"name": "베트남",    "flag": "🇻🇳", "ticker": "VNM",    "label": "VN-Index",  "dashboard": f"{DASHBOARD_BASE}/vietnam-fund-dashboard/", "scale": 99.5744},
-    "indonesia": {"name": "인도네시아","flag": "🇮🇩", "ticker": "^JKSE",  "label": "IDX",       "dashboard": f"{DASHBOARD_BASE}/indonesia-market-dashboard/"},
-    "us":        {"name": "미국",      "flag": "🇺🇸", "ticker": "^GSPC",  "label": "S&P 500",   "dashboard": f"{DASHBOARD_BASE}/us-market-dashboard/"},
-    "brazil":    {"name": "브라질",    "flag": "🇧🇷", "ticker": "^BVSP",  "label": "IBOVESPA",  "dashboard": f"{DASHBOARD_BASE}/brazil-market-dashboard/"},
+# holding=True : 현재 보유 중(매도/차익실현 신호도 받음)
+# holding=False: 관심/진입 후보(매수·레짐 신호만 받음)
+MARKETS = {
+    "^NSEI":       {"name": "인도",       "flag": "🇮🇳", "index": "NIFTY 50",      "holding": True,  "vix": "^INDIAVIX", "vix_th": 22},
+    "^VNINDEX.VN": {"name": "베트남",     "flag": "🇻🇳", "index": "VN-Index",      "holding": False, "vix": None,        "vix_th": None},
+    "^JKSE":       {"name": "인도네시아", "flag": "🇮🇩", "index": "IDX Composite", "holding": False, "vix": None,        "vix_th": None},
+    "^GSPC":       {"name": "미국",       "flag": "🇺🇸", "index": "S&P 500",       "holding": False, "vix": "^VIX",      "vix_th": 28},
+    "^BVSP":       {"name": "브라질",     "flag": "🇧🇷", "index": "IBOVESPA",      "holding": False, "vix": None,        "vix_th": None},
 }
 
+TAG = {"buy": "🟢", "sell": "🔴", "warn": "🟡"}
 
-# ── 상태 관리 ──
 
-def load_state():
+def daily_move_threshold(ticker):
+    # 신흥국은 ±2% 변동이 흔해 노이즈가 큼 → 2.5%, 미국만 2%
+    return 0.02 if ticker == "^GSPC" else 0.025
+
+
+# ----------------------------------------------------------------------
+# 지표
+# ----------------------------------------------------------------------
+def rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+
+def fetch_close(ticker):
+    """일봉 종가 시리즈 반환. 실패/부족 시 None."""
+    df = yf.download(ticker, period="2y", interval="1d",
+                     auto_adjust=False, progress=False)
+    if df is None or df.empty:
+        return None
+    if isinstance(df.columns, pd.MultiIndex):          # 단일 티커도 멀티인덱스로 올 때가 있음
+        df.columns = df.columns.get_level_values(0)
+    close = df["Close"]
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+    close = close.dropna()
+    return close if len(close) >= 60 else None
+
+
+def fetch_last(ticker):
+    """VIX 등 단일 값 조회용."""
     try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        s = fetch_close(ticker)
+        return None if s is None else float(s.iloc[-1])
     except Exception:
-        return {}
+        return None
+
+
+# ----------------------------------------------------------------------
+# 신호 평가 — '현재 참인 조건'의 집합을 만든다
+# ----------------------------------------------------------------------
+def evaluate(ticker, cfg, close):
+    last = float(close.iloc[-1])
+    prev = float(close.iloc[-2])
+    chg = (last - prev) / prev
+    r = rsi(close).iloc[-1]
+    ma20 = close.rolling(20).mean().iloc[-1]
+    ma60 = close.rolling(60).mean().iloc[-1]
+    ma120 = close.rolling(120).mean().iloc[-1]
+    ma200 = close.rolling(200).mean().iloc[-1]
+    ma200_prev = close.rolling(200).mean().iloc[-2]
+    high_52w = close.tail(252).max()
+    dd = (last - high_52w) / high_52w
+    th = daily_move_threshold(ticker)
+
+    sig = {}  # key -> (level, text)
+
+    # 매수 / 관심
+    if pd.notna(r) and r <= 35:
+        sig["rsi_oversold"] = ("buy", f"RSI {r:.0f} 과매도 · 분할매수 타점 참고")
+    if dd <= -0.15:
+        sig["drawdown15"] = ("buy", f"52주 고점比 {dd*100:.0f}% · 조정 구간")
+    if chg <= -th:
+        sig["drop"] = ("buy", f"최근 종가 {chg*100:+.1f}% 급락")
+
+    # 레짐 변화 — 펀드 holder 에게 가장 실질적
+    if pd.notna(ma200) and pd.notna(ma200_prev):
+        if prev >= ma200_prev and last < ma200:
+            sig["break200_down"] = ("warn", "200일선 하향 이탈 · 추세 점검")
+        if prev < ma200_prev and last >= ma200:
+            sig["break200_up"] = ("buy", "200일선 회복 · 추세 전환")
+
+    # 매도/주의 — 보유 종목만
+    if cfg["holding"]:
+        if pd.notna(r) and r >= 75:
+            sig["rsi_overbought"] = ("sell", f"RSI {r:.0f} 과매수 · 차익실현 검토")
+        if chg >= th:
+            sig["surge"] = ("sell", f"최근 종가 {chg*100:+.1f}% 급등 · 차익실현 검토")
+        if pd.notna(ma120) and not (ma20 > ma60 > ma120):
+            sig["trend_break"] = ("warn", "단·중기 정배열 붕괴")
+
+    # 변동성
+    if cfg["vix"]:
+        v = fetch_last(cfg["vix"])
+        if v is not None and v >= cfg["vix_th"]:
+            sig["vix"] = ("warn", f"변동성 급등 (VIX {v:.0f})")
+
+    return sig, last
+
+
+# ----------------------------------------------------------------------
+# 상태 관리 (edge 트리거 + 쿨다운)
+# ----------------------------------------------------------------------
+def load_state():
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
 
 def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
-def already_sent(state, key):
-    today = datetime.now(KST).strftime("%Y-%m-%d")
-    return key in state.get(today, [])
 
-def mark_sent(state, key):
-    today = datetime.now(KST).strftime("%Y-%m-%d")
-    state.setdefault(today, [])
-    if key not in state[today]:
-        state[today].append(key)
-
-
-# ── RSI 계산 ──
-
-def calc_rsi(prices, period=14):
-    if len(prices) < period + 1:
-        return 50.0
-    deltas = [prices[i] - prices[i - 1] for i in range(1, len(prices))]
-    gains  = [d for d in deltas[-period:] if d > 0]
-    losses = [-d for d in deltas[-period:] if d < 0]
-    avg_g = sum(gains) / period if gains else 0
-    avg_l = sum(losses) / period if losses else 0
-    if avg_l == 0:
-        return 100.0
-    return round(100 - (100 / (1 + avg_g / avg_l)), 1)
-
-
-# ── 시장 데이터 수집 ──
-
-def fetch_data(country_key):
-    cfg = COUNTRIES[country_key]
-    ticker_sym = cfg["ticker"]
-    scale = cfg.get("scale", 1.0)
-
-    t = yf.Ticker(ticker_sym)
-
-    # 현재가 & 전일 대비 등락률
-    try:
-        fi = t.fast_info
-        current = fi.last_price * scale
-        prev = fi.previous_close * scale
-        pct = (current - prev) / prev * 100
-    except Exception:
-        hist = t.history(period="5d", interval="1d")
-        closes = [float(r["Close"]) for _, r in hist.iterrows()]
-        current = closes[-1] * scale
-        prev = closes[-2] * scale if len(closes) >= 2 else current
-        pct = (current - prev) / prev * 100
-
-    # 베트남: ^VNINDEX.VN 직접 시도
-    if country_key == "vietnam":
-        try:
-            vn = yf.Ticker("^VNINDEX.VN")
-            vn_price = vn.fast_info.last_price
-            if vn_price and vn_price > 100:
-                vn_prev = vn.fast_info.previous_close or prev / scale
-                current = vn_price
-                prev = vn_prev
-                pct = (current - prev) / prev * 100
-        except Exception:
-            pass
-
-    # RSI(14) - 일봉 60일치
-    try:
-        hist_d = t.history(period="60d", interval="1d")
-        prices_d = [float(r["Close"]) * scale for _, r in hist_d.iterrows()]
-        rsi = calc_rsi(prices_d)
-    except Exception:
-        rsi = 50.0
-
-    # 52주 고점 대비 위치
-    try:
-        hist_y = t.history(period="1y", interval="1d")
-        closes_y = [float(r["Close"]) * scale for _, r in hist_y.iterrows()]
-        hi52 = max(closes_y)
-        from_hi = (current - hi52) / hi52 * 100
-    except Exception:
-        from_hi = 0.0
-
-    # 연속 하락일수 (일봉 기준)
-    consec_down = 0
-    try:
-        closes_r = [float(r["Close"]) * scale for _, r in hist_d.iterrows()]
-        for i in range(len(closes_r) - 1, 0, -1):
-            if closes_r[i] < closes_r[i - 1]:
-                consec_down += 1
-            else:
-                break
-    except Exception:
-        pass
-
-    # 보조 지표
-    india_vix = us_vix = None
-    if country_key == "india":
-        try:
-            india_vix = round(yf.Ticker("^INDIAVIX").fast_info.last_price, 1)
-        except Exception:
-            pass
-    try:
-        us_vix = round(yf.Ticker("^VIX").fast_info.last_price, 1)
-    except Exception:
-        pass
-
-    return {
-        "current": round(current, 1),
-        "pct": round(pct, 2),
-        "rsi": rsi,
-        "from_hi": round(from_hi, 1),
-        "consec_down": consec_down,
-        "india_vix": india_vix,
-        "us_vix": us_vix,
-    }
+def diff_fire(prev_t, current_keys, today):
+    """이번에 '새로' 참이 된 신호만 골라낸다.
+       active = 직전 run 에서 이미 참이었는지. 쿨다운으로 깜빡임 재발송 차단."""
+    fired, new_t = [], {}
+    for key in current_keys:
+        rec = prev_t.get(key, {})
+        was_active = rec.get("active", False)
+        last_fired = rec.get("last_fired")
+        if was_active:
+            # 진행 중인 에피소드 → 재발송 안 함, active 유지
+            new_t[key] = {"active": True, "last_fired": last_fired}
+            continue
+        # 새 에피소드(직전 거짓 또는 처음) → 쿨다운 확인
+        cooldown_ok = True
+        if last_fired:
+            cooldown_ok = (today - dt.date.fromisoformat(last_fired)).days >= COOLDOWN_DAYS
+        if cooldown_ok:
+            fired.append(key)
+            new_t[key] = {"active": True, "last_fired": today.isoformat()}
+        else:
+            # 쿨다운으로 보류 → active 는 False 유지(쿨다운 지나면 그때 발송)
+            new_t[key] = {"active": False, "last_fired": last_fired}
+    # 직전엔 참이었지만 지금은 거짓 → 해소됨(active=False). last_fired 는 쿨다운용으로 보존
+    for key, rec in prev_t.items():
+        if key not in current_keys:
+            new_t[key] = {"active": False, "last_fired": rec.get("last_fired")}
+    return fired, new_t
 
 
-# ── 알림 조건 체크 ──
-
-def check_conditions(country_key, data):
-    alerts = []
-    pct       = data["pct"]
-    rsi       = data["rsi"]
-    from_hi   = data["from_hi"]
-    down      = data["consec_down"]
-    us_vix    = data.get("us_vix")
-    india_vix = data.get("india_vix")
-
-    if rsi <= 35:
-        alerts.append({"type": "매수_rsi",
-            "msg": f"RSI {rsi} — 과매도 구간, 분할 매수 검토"})
-
-    if pct <= -2.0:
-        alerts.append({"type": "매수_급락",
-            "msg": f"당일 {pct:.2f}% 급락 — 단기 저점 매수 기회"})
-
-    if from_hi <= -15.0:
-        alerts.append({"type": "매수_저점",
-            "msg": f"52주 고점 대비 {from_hi:.1f}% 하락 — 조정 구간 진입"})
-
-    if rsi >= 75:
-        alerts.append({"type": "주의_rsi",
-            "msg": f"RSI {rsi} — 과매수 구간, 차익실현 검토"})
-
-    if pct >= 2.0:
-        alerts.append({"type": "주의_급등",
-            "msg": f"당일 +{pct:.2f}% 급등 — 단기 고점, 신규 진입 자제"})
-
-    if down >= 3:
-        alerts.append({"type": "주의_연속하락",
-            "msg": f"{down}일 연속 하락 — 추세 하락 경고, 관망 권장"})
-
-    if country_key == "india" and india_vix and india_vix >= 22:
-        alerts.append({"type": "주의_vix",
-            "msg": f"India VIX {india_vix} — 변동성 급등, 신규 매수 자제"})
-
-    if country_key == "us" and us_vix and us_vix >= 28:
-        alerts.append({"type": "주의_vix",
-            "msg": f"미국 VIX {us_vix} — 공포 구간, 포지션 점검"})
-
-    if country_key not in ("india", "us") and us_vix and us_vix >= 28:
-        alerts.append({"type": "주의_vix",
-            "msg": f"미국 VIX {us_vix} — 글로벌 공포, 신흥국 영향 주의"})
-
-    return alerts
-
-
-# ── 카카오 API ──
-
-def kakao_get_access_token(rest_api_key, refresh_token, client_secret=None):
-    params = {
+# ----------------------------------------------------------------------
+# 카카오 (나에게 보내기)
+# ----------------------------------------------------------------------
+def refresh_access_token():
+    r = requests.post("https://kauth.kakao.com/oauth/token", data={
         "grant_type": "refresh_token",
-        "client_id": rest_api_key,
-        "refresh_token": refresh_token,
-    }
-    if client_secret:
-        params["client_secret"] = client_secret
-    data = urllib.parse.urlencode(params).encode()
-    req = urllib.request.Request(
-        "https://kauth.kakao.com/oauth/token",
-        data=data,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            result = json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"토큰 갱신 HTTP {e.code}: {body}")
-    if "access_token" not in result:
-        raise RuntimeError(f"토큰 갱신 실패: {result}")
-    return result["access_token"]
+        "client_id": os.environ["KAKAO_REST_API_KEY"],
+        "refresh_token": os.environ["KAKAO_REFRESH_TOKEN"],
+        "client_secret": os.environ["KAKAO_CLIENT_SECRET"],
+    }, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    return data["access_token"], data.get("refresh_token")  # refresh 는 회전될 때만 옴
 
-def kakao_send(access_token, text, dashboard_url):
-    template = json.dumps({
+
+def send_kakao(access_token, text):
+    template = {
         "object_type": "text",
-        "text": text[:1000],
-        "link": {"web_url": dashboard_url, "mobile_web_url": dashboard_url},
+        "text": text,
+        "link": {"web_url": DASHBOARD_URL, "mobile_web_url": DASHBOARD_URL},
         "button_title": "대시보드 열기",
-    }, ensure_ascii=False)
-    data = urllib.parse.urlencode({"template_object": template}).encode()
-    req = urllib.request.Request(
+    }
+    r = requests.post(
         "https://kapi.kakao.com/v2/api/talk/memo/default/send",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
+        headers={"Authorization": f"Bearer {access_token}"},
+        data={"template_object": json.dumps(template, ensure_ascii=False)},
+        timeout=10,
     )
-    with urllib.request.urlopen(req, timeout=10) as r:
-        result = json.loads(r.read())
-    if result.get("result_code") != 0:
-        raise RuntimeError(f"메시지 전송 실패: {result}")
-    print("✅ 카카오 전송 완료")
+    r.raise_for_status()
 
 
-# ── 메인 ──
+def chunk_send(access_token, full_text, limit=190):
+    """text 템플릿은 약 200자 제한이라 줄 단위로 잘라 순차 발송."""
+    buf = ""
+    for line in full_text.split("\n"):
+        if buf and len(buf) + len(line) + 1 > limit:
+            send_kakao(access_token, buf)
+            buf = line
+        else:
+            buf = line if not buf else f"{buf}\n{line}"
+    if buf:
+        send_kakao(access_token, buf)
 
-def main():
-    rest_api_key  = os.environ.get("KAKAO_REST_API_KEY", "").strip()
-    refresh_token = os.environ.get("KAKAO_REFRESH_TOKEN", "").strip()
-    client_secret = os.environ.get("KAKAO_CLIENT_SECRET", "").strip() or None
 
-    if not rest_api_key or not refresh_token:
-        print("⚠️  KAKAO 환경변수 없음 — 알림 건너뜀")
+# ----------------------------------------------------------------------
+# refresh token 회전 시 GitHub Secret 자동 갱신 (GH_PAT 있을 때만)
+# ----------------------------------------------------------------------
+def update_github_secret(name, value):
+    pat = os.environ.get("GH_PAT")
+    repo = os.environ.get("GITHUB_REPOSITORY")  # Actions 가 자동 주입
+    if not pat or not repo:
+        print("GH_PAT 미설정 → refresh token 자동 저장 생략(약 2개월 뒤 수동 갱신 필요)")
         return
+    import base64
+    from nacl import encoding, public
+    h = {"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json"}
+    key = requests.get(
+        f"https://api.github.com/repos/{repo}/actions/secrets/public-key",
+        headers=h, timeout=10).json()
+    pk = public.PublicKey(key["key"].encode(), encoding.Base64Encoder())
+    enc = base64.b64encode(public.SealedBox(pk).encrypt(value.encode())).decode()
+    requests.put(
+        f"https://api.github.com/repos/{repo}/actions/secrets/{name}",
+        headers=h, json={"encrypted_value": enc, "key_id": key["key_id"]}, timeout=10
+    ).raise_for_status()
+    print("refresh token 갱신본 저장 완료")
 
-    now_kst = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
-    print(f"[{now_kst}] 글로벌 증시 알림체크 시작")
 
+# ----------------------------------------------------------------------
+def main():
+    today = dt.datetime.now(KST).date()
     state = load_state()
-    access_token = kakao_get_access_token(rest_api_key, refresh_token, client_secret)
 
-    for country_key, cfg in COUNTRIES.items():
-        flag = cfg["flag"]
-        name = cfg["name"]
-        label = cfg["label"]
-        dashboard_url = cfg["dashboard"]
+    access, new_refresh = refresh_access_token()
+    if new_refresh and new_refresh != os.environ.get("KAKAO_REFRESH_TOKEN"):
+        update_github_secret("KAKAO_REFRESH_TOKEN", new_refresh)
 
-        print(f"\n{flag} {name} 체크 중...")
+    blocks = []
+    for ticker, cfg in MARKETS.items():
         try:
-            data = fetch_data(country_key)
+            close = fetch_close(ticker)
         except Exception as e:
-            print(f"  데이터 수집 실패: {e}")
+            print(f"[{cfg['name']}] 조회 실패 → 스킵: {e}")
+            continue
+        if close is None:
+            print(f"[{cfg['name']}] 데이터 없음 → 스킵 (티커 확인: {ticker})")
             continue
 
-        print(f"  {label}: {data['current']:,.0f} ({data['pct']:+.2f}%) | RSI {data['rsi']} | 고점대비 {data['from_hi']:.1f}%")
+        sig, price = evaluate(ticker, cfg, close)
+        fired, new_t = diff_fire(state.get(ticker, {}), set(sig.keys()), today)
+        state[ticker] = new_t
 
-        alerts = check_conditions(country_key, data)
-        for alert in alerts:
-            send_key = f"{country_key}_{alert['type']}"
-            if already_sent(state, send_key):
-                print(f"  ⏭ 오늘 이미 발송: {send_key}")
-                continue
+        if fired:
+            lines = [f"{cfg['flag']}[{cfg['name']}] {cfg['index']} {price:,.0f}"]
+            lines += [f" {TAG[sig[k][0]]} {sig[k][1]}" for k in fired]
+            blocks.append("\n".join(lines))
+        print(f"[{cfg['name']}] 현재신호 {sorted(sig.keys())} / 신규 {fired}")
 
-            msg = (
-                f"{flag} [{name}] {'🟢 매수 신호!' if '매수' in alert['type'] else '⚠️ 주의'}\n"
-                f"{label} {data['current']:,.0f} ({data['pct']:+.2f}%)\n"
-                f"→ {alert['msg']}"
-            )
-            kakao_send(access_token, msg, dashboard_url)
-            mark_sent(state, send_key)
-            save_state(state)
-            print(f"  → 발송: {send_key}")
-
-        if not alerts:
-            print("  조건 없음")
-
-    cutoff = (datetime.now(KST) - timedelta(days=3)).strftime("%Y-%m-%d")
-    for d in list(state.keys()):
-        if d < cutoff:
-            del state[d]
     save_state(state)
-    print("\n완료")
+
+    if not blocks:
+        print("발송할 신규 신호 없음")
+        return
+
+    header = (f"📊 글로벌 증시 알림 {today:%m/%d}\n"
+              f"확정 종가 기준 · 펀드 컷오프 {FUND_CUTOFF} KST 전 검토\n")
+    footer = "\n※ 펀드는 미래 영업일 기준가로 체결 · 즉시매매 아님"
+    body = header + "\n".join(blocks) + footer
+    chunk_send(access, body)
+    print("발송 완료\n" + body)
 
 
 if __name__ == "__main__":
