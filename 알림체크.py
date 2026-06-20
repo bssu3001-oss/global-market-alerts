@@ -32,7 +32,7 @@ KST = ZoneInfo("Asia/Seoul")
 # holding=False: 관심/진입 후보(매수·레짐 신호만 받음)
 MARKETS = {
     "^NSEI":       {"name": "인도",       "flag": "🇮🇳", "index": "NIFTY 50",      "holding": True,  "vix": "^INDIAVIX", "vix_th": 22},
-    "^VNINDEX.VN": {"name": "베트남",     "flag": "🇻🇳", "index": "VN-Index",      "holding": False, "vix": None,        "vix_th": None},
+    "VNM":         {"name": "베트남",     "flag": "🇻🇳", "index": "VNM ETF",      "holding": False, "vix": None,        "vix_th": None},
     "^JKSE":       {"name": "인도네시아", "flag": "🇮🇩", "index": "IDX Composite", "holding": False, "vix": None,        "vix_th": None},
     "^GSPC":       {"name": "미국",       "flag": "🇺🇸", "index": "S&P 500",       "holding": False, "vix": "^VIX",      "vix_th": 28},
     "^BVSP":       {"name": "브라질",     "flag": "🇧🇷", "index": "IBOVESPA",      "holding": False, "vix": None,        "vix_th": None},
