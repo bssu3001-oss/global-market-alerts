@@ -38,7 +38,11 @@ MARKETS = {
     "^BVSP":       {"name": "브라질",     "flag": "🇧🇷", "index": "IBOVESPA",      "holding": False, "vix": None,        "vix_th": None},
 }
 
-TAG = {"buy": "🟢", "sell": "🔴", "warn": "🟡"}
+TAG = {
+    "buy":  "🟢【매수 기회】",
+    "sell": "🔴【차익실현】",
+    "warn": "🟡【주의】",
+}
 
 
 def daily_move_threshold(ticker):
@@ -273,7 +277,7 @@ def main():
 
         if fired:
             lines = [f"{cfg['flag']}[{cfg['name']}] {cfg['index']} {price:,.0f}"]
-            lines += [f" {TAG[sig[k][0]]} {sig[k][1]}" for k in fired]
+            lines += [f" {TAG[sig[k][0]]}{sig[k][1]}" for k in fired]
             blocks.append("\n".join(lines))
         print(f"[{cfg['name']}] 현재신호 {sorted(sig.keys())} / 신규 {fired}")
 
