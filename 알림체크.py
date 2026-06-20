@@ -44,6 +44,16 @@ TAG = {
     "warn": "🟡【주의】",
 }
 
+# 신호 옆에 붙는 '참고 지표' — 해석(악재/호재)은 안 붙이고 숫자만 제공
+# 원달러(KRW=X)·유가(CL=F)는 모든 나라 공통, 아래는 나라별 현지통화
+REF_LOCAL = {
+    "^NSEI": ("달러루피",   "INR=X"),
+    "VNM":   ("달러동",     "VND=X"),
+    "^JKSE": ("달러루피아", "IDR=X"),
+    "^GSPC": None,                       # 미국은 현지통화가 달러 자체
+    "^BVSP": ("달러헤알",   "BRL=X"),
+}
+
 
 def daily_move_threshold(ticker):
     # 신흥국은 ±2% 변동이 흔해 노이즈가 큼 → 2.5%, 미국만 2%
@@ -85,6 +95,55 @@ def fetch_last(ticker):
         return None if s is None else float(s.iloc[-1])
     except Exception:
         return None
+
+
+_quote_cache = {}
+
+
+def fetch_quote(ticker):
+    """현재값과 전일대비 변동률 (last, chg). 실패 시 None. 같은 run 내 캐시."""
+    if ticker in _quote_cache:
+        return _quote_cache[ticker]
+    result = None
+    try:
+        df = yf.download(ticker, period="5d", interval="1d",
+                         auto_adjust=False, progress=False)
+        if df is not None and not df.empty:
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            c = df["Close"]
+            if isinstance(c, pd.DataFrame):
+                c = c.iloc[:, 0]
+            c = c.dropna()
+            if len(c) >= 2:
+                last, prev = float(c.iloc[-1]), float(c.iloc[-2])
+                result = (last, (last - prev) / prev)
+    except Exception:
+        result = None
+    _quote_cache[ticker] = result
+    return result
+
+
+def _fmt(v):
+    return f"{v:,.0f}" if v >= 100 else f"{v:,.2f}"
+
+
+def ref_line(ticker):
+    """해당 나라 신호 밑에 붙일 참고 지표 한 줄."""
+    parts = []
+    q = fetch_quote("KRW=X")                       # 원달러 (모든 나라 공통)
+    if q:
+        parts.append(f"원달러 {_fmt(q[0])}({q[1]*100:+.1f}%)")
+    loc = REF_LOCAL.get(ticker)                     # 나라별 현지통화
+    if loc:
+        name, t = loc
+        q = fetch_quote(t)
+        if q:
+            parts.append(f"{name} {_fmt(q[0])}({q[1]*100:+.1f}%)")
+    q = fetch_quote("CL=F")                         # 유가 (모든 나라 공통)
+    if q:
+        parts.append(f"유가 {_fmt(q[0])}({q[1]*100:+.1f}%)")
+    return " · ".join(parts)
 
 
 # ----------------------------------------------------------------------
@@ -278,6 +337,9 @@ def main():
         if fired:
             lines = [f"{cfg['flag']}[{cfg['name']}] {cfg['index']} {price:,.0f}"]
             lines += [f" {TAG[sig[k][0]]}{sig[k][1]}" for k in fired]
+            rl = ref_line(ticker)
+            if rl:
+                lines.append(f" ↳ {rl}")
             blocks.append("\n".join(lines))
         print(f"[{cfg['name']}] 현재신호 {sorted(sig.keys())} / 신규 {fired}")
 
