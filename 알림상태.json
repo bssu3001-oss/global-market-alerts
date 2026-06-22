@@ -20,12 +20,13 @@
   "^GSPC": {},
   "^BVSP": {
     "drawdown15": {
-      "active": true,
+      "active": false,
       "last_fired": "2026-06-20"
     },
     "rsi_oversold": {
-      "active": true,
+      "active": false,
       "last_fired": "2026-06-20"
     }
-  }
+  },
+  "VNM": {}
 }
