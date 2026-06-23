@@ -153,7 +153,9 @@ def evaluate(ticker, cfg, close):
     last = float(close.iloc[-1])
     prev = float(close.iloc[-2])
     chg = (last - prev) / prev
-    r = rsi(close).iloc[-1]
+    rsi_s = rsi(close)
+    r = rsi_s.iloc[-1]
+    recent_oversold = rsi_s.iloc[-6:-1].min()   # 직전 5거래일 중 과매도였는지
     ma20 = close.rolling(20).mean().iloc[-1]
     ma60 = close.rolling(60).mean().iloc[-1]
     ma120 = close.rolling(120).mean().iloc[-1]
@@ -168,6 +170,9 @@ def evaluate(ticker, cfg, close):
     # 매수 / 관심
     if pd.notna(r) and r <= 35:
         sig["rsi_oversold"] = ("buy", f"RSI {r:.0f} 과매도 · 분할매수 타점 참고")
+    # 반등 확인 — 과매도(35↓)에서 40 위로 올라옴 → 떨어지는 칼날 피하고 바닥 확인 후 진입
+    if pd.notna(r) and r >= 40 and pd.notna(recent_oversold) and recent_oversold <= 35:
+        sig["rsi_rebound"] = ("buy", f"RSI {r:.0f} 과매도 탈출 · 반등 확인")
     if dd <= -0.15:
         sig["drawdown15"] = ("buy", f"52주 고점比 {dd*100:.0f}% · 조정 구간")
     if chg <= -th:
