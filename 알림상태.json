@@ -19,6 +19,10 @@
   },
   "^GSPC": {},
   "^BVSP": {
+    "rsi_rebound": {
+      "active": true,
+      "last_fired": "2026-06-23"
+    },
     "drawdown15": {
       "active": false,
       "last_fired": "2026-06-20"
