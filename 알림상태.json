@@ -15,6 +15,10 @@
     "drawdown15": {
       "active": true,
       "last_fired": "2026-06-20"
+    },
+    "drop": {
+      "active": true,
+      "last_fired": "2026-06-24"
     }
   },
   "^GSPC": {},
@@ -32,5 +36,10 @@
       "last_fired": "2026-06-20"
     }
   },
-  "VNM": {}
+  "VNM": {
+    "break200_down": {
+      "active": true,
+      "last_fired": "2026-06-24"
+    }
+  }
 }
