@@ -12,17 +12,17 @@
     }
   },
   "^JKSE": {
-    "rsi_oversold": {
-      "active": true,
-      "last_fired": "2026-06-30"
-    },
-    "drop": {
-      "active": true,
-      "last_fired": "2026-06-30"
-    },
     "drawdown15": {
       "active": true,
       "last_fired": "2026-06-20"
+    },
+    "rsi_oversold": {
+      "active": false,
+      "last_fired": "2026-06-30"
+    },
+    "drop": {
+      "active": false,
+      "last_fired": "2026-06-30"
     }
   },
   "^GSPC": {},
