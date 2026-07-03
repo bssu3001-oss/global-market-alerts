@@ -1,0 +1,40 @@
+name: 지지선/저항선 터치 알림
+
+on:
+  schedule:
+    # UTC 00:00~22:00 15분마다 — 인도/베트남/인도네시아 낮장 + 미국/브라질 밤장 모두 커버
+    - cron: "*/15 0-22 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # 알림상태_터치.json 커밋용
+
+concurrency:
+  group: touch-alert
+  cancel-in-progress: false
+
+jobs:
+  touch-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 지지선/저항선 터치 체크
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python 터치알림.py
+
+      - name: 상태 저장
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add 알림상태_터치.json
+          git diff --staged --quiet || git commit -m "터치알림 상태 업데이트 $(date +%F)"
+          git push
