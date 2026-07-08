@@ -17,7 +17,7 @@
       "last_fired": "2026-06-20"
     },
     "rsi_rebound": {
-      "active": true,
+      "active": false,
       "last_fired": "2026-07-03"
     },
     "rsi_oversold": {
@@ -46,7 +46,7 @@
   },
   "VNM": {
     "break200_down": {
-      "active": true,
+      "active": false,
       "last_fired": "2026-07-07"
     },
     "break200_up": {
