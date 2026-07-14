@@ -45,6 +45,10 @@
     }
   },
   "VNM": {
+    "drop": {
+      "active": true,
+      "last_fired": "2026-07-14"
+    },
     "break200_down": {
       "active": false,
       "last_fired": "2026-07-07"
