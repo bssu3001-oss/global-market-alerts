@@ -45,6 +45,10 @@
     }
   },
   "VNM": {
+    "rsi_oversold": {
+      "active": true,
+      "last_fired": "2026-07-16"
+    },
     "drop": {
       "active": false,
       "last_fired": "2026-07-14"
