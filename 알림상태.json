@@ -31,6 +31,18 @@
   },
   "^GSPC": {},
   "^BVSP": {
+    "drop": {
+      "active": true,
+      "last_fired": "2026-08-12"
+    },
+    "drawdown15": {
+      "active": true,
+      "last_fired": "2026-08-12"
+    },
+    "rsi_oversold": {
+      "active": true,
+      "last_fired": "2026-08-12"
+    },
     "break200_down": {
       "active": false,
       "last_fired": "2026-08-10"
@@ -38,14 +50,6 @@
     "rsi_rebound": {
       "active": false,
       "last_fired": "2026-06-23"
-    },
-    "drawdown15": {
-      "active": false,
-      "last_fired": "2026-06-20"
-    },
-    "rsi_oversold": {
-      "active": false,
-      "last_fired": "2026-06-20"
     }
   },
   "VNM": {
