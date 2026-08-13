@@ -31,7 +31,7 @@
   },
   "^GSPC": {},
   "^BVSP": {
-    "drop": {
+    "rsi_oversold": {
       "active": true,
       "last_fired": "2026-08-12"
     },
@@ -39,8 +39,8 @@
       "active": true,
       "last_fired": "2026-08-12"
     },
-    "rsi_oversold": {
-      "active": true,
+    "drop": {
+      "active": false,
       "last_fired": "2026-08-12"
     },
     "break200_down": {
