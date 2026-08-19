@@ -7,8 +7,8 @@
   ],
   "^NSEI": {
     "trend_break": {
-      "active": false,
-      "last_fired": "2026-06-20"
+      "active": true,
+      "last_fired": "2026-08-20"
     }
   },
   "^JKSE": {
@@ -31,12 +31,12 @@
   },
   "^GSPC": {},
   "^BVSP": {
-    "rsi_oversold": {
+    "drawdown15": {
       "active": true,
       "last_fired": "2026-08-12"
     },
-    "drawdown15": {
-      "active": true,
+    "rsi_oversold": {
+      "active": false,
       "last_fired": "2026-08-12"
     },
     "drop": {
