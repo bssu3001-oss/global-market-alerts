@@ -7,7 +7,7 @@
   ],
   "^NSEI": {
     "trend_break": {
-      "active": true,
+      "active": false,
       "last_fired": "2026-08-20"
     }
   },
