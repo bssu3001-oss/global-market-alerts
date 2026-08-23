@@ -31,8 +31,12 @@
   },
   "^GSPC": {},
   "^BVSP": {
-    "drawdown15": {
+    "rsi_rebound": {
       "active": true,
+      "last_fired": "2026-08-24"
+    },
+    "drawdown15": {
+      "active": false,
       "last_fired": "2026-08-12"
     },
     "rsi_oversold": {
@@ -46,10 +50,6 @@
     "break200_down": {
       "active": false,
       "last_fired": "2026-08-10"
-    },
-    "rsi_rebound": {
-      "active": false,
-      "last_fired": "2026-06-23"
     }
   },
   "VNM": {
