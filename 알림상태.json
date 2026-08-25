@@ -31,6 +31,10 @@
   },
   "^GSPC": {},
   "^BVSP": {
+    "break200_up": {
+      "active": true,
+      "last_fired": "2026-08-26"
+    },
     "rsi_rebound": {
       "active": true,
       "last_fired": "2026-08-24"
