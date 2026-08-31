@@ -57,8 +57,12 @@
     }
   },
   "VNM": {
-    "break200_up": {
+    "break200_down": {
       "active": true,
+      "last_fired": "2026-08-31"
+    },
+    "break200_up": {
+      "active": false,
       "last_fired": "2026-08-28"
     },
     "rsi_rebound": {
@@ -76,10 +80,6 @@
     "drop": {
       "active": false,
       "last_fired": "2026-07-21"
-    },
-    "break200_down": {
-      "active": false,
-      "last_fired": "2026-07-07"
     }
   }
 }
