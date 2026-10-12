@@ -6,17 +6,17 @@
     "brazil_매수_저점"
   ],
   "^NSEI": {
-    "drawdown15": {
-      "active": true,
-      "last_fired": "2026-10-09"
-    },
-    "rsi_oversold": {
-      "active": true,
-      "last_fired": "2026-10-08"
-    },
     "trend_break": {
       "active": true,
       "last_fired": "2026-09-08"
+    },
+    "drawdown15": {
+      "active": false,
+      "last_fired": "2026-10-09"
+    },
+    "rsi_oversold": {
+      "active": false,
+      "last_fired": "2026-10-08"
     }
   },
   "^JKSE": {
@@ -66,11 +66,11 @@
   },
   "VNM": {
     "drawdown15": {
-      "active": false,
-      "last_fired": "2026-10-05"
+      "active": true,
+      "last_fired": "2026-10-12"
     },
     "rsi_oversold": {
-      "active": true,
+      "active": false,
       "last_fired": "2026-10-09"
     },
     "drop": {
