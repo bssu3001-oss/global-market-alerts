@@ -15,8 +15,8 @@
       "last_fired": "2026-10-09"
     },
     "rsi_oversold": {
-      "active": false,
-      "last_fired": "2026-10-08"
+      "active": true,
+      "last_fired": "2026-10-13"
     }
   },
   "^JKSE": {
@@ -24,13 +24,13 @@
       "active": true,
       "last_fired": "2026-06-20"
     },
+    "rsi_oversold": {
+      "active": true,
+      "last_fired": "2026-10-13"
+    },
     "rsi_rebound": {
       "active": false,
       "last_fired": "2026-10-06"
-    },
-    "rsi_oversold": {
-      "active": false,
-      "last_fired": "2026-09-29"
     },
     "drop": {
       "active": false,
