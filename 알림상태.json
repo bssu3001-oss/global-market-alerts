@@ -24,13 +24,13 @@
     }
   },
   "^JKSE": {
-    "drawdown15": {
-      "active": true,
-      "last_fired": "2026-06-20"
-    },
     "rsi_oversold": {
       "active": true,
       "last_fired": "2026-10-13"
+    },
+    "drawdown15": {
+      "active": true,
+      "last_fired": "2026-06-20"
     },
     "rsi_rebound": {
       "active": false,
@@ -69,13 +69,13 @@
     }
   },
   "VNM": {
-    "drawdown15": {
-      "active": true,
-      "last_fired": "2026-10-12"
-    },
     "rsi_oversold": {
       "active": true,
       "last_fired": "2026-10-14"
+    },
+    "drawdown15": {
+      "active": true,
+      "last_fired": "2026-10-12"
     },
     "drop": {
       "active": false,
