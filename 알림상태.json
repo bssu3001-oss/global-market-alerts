@@ -11,7 +11,7 @@
       "last_fired": "2026-09-08"
     },
     "rsi_rebound": {
-      "active": true,
+      "active": false,
       "last_fired": "2026-10-14"
     },
     "drawdown15": {
@@ -69,8 +69,12 @@
     }
   },
   "VNM": {
-    "drawdown15": {
+    "rsi_rebound": {
       "active": true,
+      "last_fired": "2026-10-22"
+    },
+    "drawdown15": {
+      "active": false,
       "last_fired": "2026-10-12"
     },
     "rsi_oversold": {
@@ -88,10 +92,6 @@
     "break200_up": {
       "active": false,
       "last_fired": "2026-08-28"
-    },
-    "rsi_rebound": {
-      "active": false,
-      "last_fired": "2026-07-31"
     }
   }
 }
