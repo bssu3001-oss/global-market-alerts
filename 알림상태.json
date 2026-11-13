@@ -32,13 +32,13 @@
     }
   },
   "^JKSE": {
-    "drawdown15": {
-      "active": true,
-      "last_fired": "2026-06-20"
-    },
     "rsi_rebound": {
       "active": true,
       "last_fired": "2026-11-12"
+    },
+    "drawdown15": {
+      "active": true,
+      "last_fired": "2026-06-20"
     },
     "rsi_oversold": {
       "active": false,
