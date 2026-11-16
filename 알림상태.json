@@ -32,13 +32,13 @@
     }
   },
   "^JKSE": {
-    "rsi_rebound": {
-      "active": true,
-      "last_fired": "2026-11-12"
-    },
     "drawdown15": {
       "active": true,
       "last_fired": "2026-06-20"
+    },
+    "rsi_rebound": {
+      "active": true,
+      "last_fired": "2026-11-12"
     },
     "rsi_oversold": {
       "active": false,
@@ -51,7 +51,7 @@
   },
   "^GSPC": {
     "rsi_rebound": {
-      "active": true,
+      "active": false,
       "last_fired": "2026-11-10"
     },
     "drop": {
