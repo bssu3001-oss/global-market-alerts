@@ -37,7 +37,7 @@
       "last_fired": "2026-06-20"
     },
     "rsi_rebound": {
-      "active": true,
+      "active": false,
       "last_fired": "2026-11-12"
     },
     "rsi_oversold": {
@@ -68,12 +68,12 @@
     }
   },
   "^BVSP": {
+    "rsi_oversold": {
+      "active": true,
+      "last_fired": "2026-11-17"
+    },
     "drawdown15": {
       "active": true,
-      "last_fired": "2026-10-27"
-    },
-    "rsi_oversold": {
-      "active": false,
       "last_fired": "2026-10-27"
     },
     "drop": {
@@ -95,8 +95,8 @@
   },
   "VNM": {
     "drawdown15": {
-      "active": false,
-      "last_fired": "2026-11-02"
+      "active": true,
+      "last_fired": "2026-11-17"
     },
     "rsi_rebound": {
       "active": false,
