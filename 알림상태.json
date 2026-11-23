@@ -11,8 +11,8 @@
       "last_fired": "2026-09-08"
     },
     "rsi_overbought": {
-      "active": false,
-      "last_fired": "2026-11-09"
+      "active": true,
+      "last_fired": "2026-11-23"
     },
     "break200_up": {
       "active": false,
@@ -54,11 +54,11 @@
       "active": true,
       "last_fired": "2026-11-20"
     },
-    "drop": {
+    "rsi_oversold": {
       "active": true,
       "last_fired": "2026-11-20"
     },
-    "rsi_oversold": {
+    "drop": {
       "active": true,
       "last_fired": "2026-11-20"
     },
@@ -77,8 +77,8 @@
       "last_fired": "2026-10-27"
     },
     "rsi_oversold": {
-      "active": false,
-      "last_fired": "2026-11-17"
+      "active": true,
+      "last_fired": "2026-11-23"
     },
     "drop": {
       "active": false,
@@ -102,13 +102,13 @@
       "active": true,
       "last_fired": "2026-11-17"
     },
+    "rsi_oversold": {
+      "active": true,
+      "last_fired": "2026-11-23"
+    },
     "rsi_rebound": {
       "active": false,
       "last_fired": "2026-10-22"
-    },
-    "rsi_oversold": {
-      "active": false,
-      "last_fired": "2026-10-14"
     },
     "drop": {
       "active": false,
